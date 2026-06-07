@@ -1,357 +1,55 @@
-# -*- coding: utf-8 -*-
-"""
-Template_Eksperimen_MSML - versi GitHub Actions
-(Diadaptasi dari Google Colab: google.colab dihapus)
-"""
-
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import glob
-import warnings
-import os
-
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
 
-warnings.filterwarnings('ignore')
-pd.set_option('display.max_columns', None)
-pd.set_option('display.float_format', lambda x: f'{x:.4f}')
+def preprocess_data(input_file, output_file):
 
-try:
-    plt.style.use('seaborn-v0_8-whitegrid')
-except OSError:
-    plt.style.use('ggplot')
+    # Load data
+    df = pd.read_csv(input_file)
 
-print("✅ Semua library berhasil diimpor!")
-print(f"   pandas  : {pd.__version__}")
-print(f"   numpy   : {np.__version__}")
+    # Drop kolom
+    df.drop("customerID", axis=1, inplace=True)
 
-# -- 3. Memuat Dataset ----------------------------------------
-# Cari file CSV di direktori saat ini (atau subfolder)
-csv_files = glob.glob('*.csv') + glob.glob('**/*.csv', recursive=True)
-if not csv_files:
-    raise FileNotFoundError(
-        "❌ Tidak ada file CSV ditemukan. "
-        "Pastikan file dataset sudah ada di dalam folder 'preprocessing/'."
+    # Ubah tipe data
+    df["TotalCharges"] = pd.to_numeric(
+        df["TotalCharges"],
+        errors="coerce"
     )
 
-file_name = csv_files[0]
-df = pd.read_csv(file_name)
-df_raw = df.copy()
+    # Missing value
+    df["TotalCharges"] = df["TotalCharges"].fillna(
+        df["TotalCharges"].median()
+    )
 
-print("✅ Dataset berhasil dimuat!")
-print(f"   Nama file     : {file_name}")
-print(f"   Jumlah baris  : {df.shape[0]:,}")
-print(f"   Jumlah kolom  : {df.shape[1]}")
-print()
+    # Encoding
+    encoder = LabelEncoder()
 
-print("5 Baris Pertama:")
-print(df.head())
+    for col in df.select_dtypes(include="object").columns:
+        df[col] = encoder.fit_transform(df[col])
 
-print()
+    # Scaling
+    X = df.drop("Churn", axis=1)
+    y = df["Churn"]
 
-print("5 Baris Terakhir:")
-print(df.tail())
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-# -- 4. EDA ----------------------------------------
-print("=" * 60)
-print("         INFORMASI UMUM DATASET")
-print("=" * 60)
-print(f"\nShape  : {df.shape[0]:,} baris x {df.shape[1]} kolom")
-print()
-df.info()
+    processed_df = pd.DataFrame(
+        X_scaled,
+        columns=X.columns
+    )
 
-print("📊 Statistik Deskriptif - Fitur Numerik:")
-print(df.describe())
+    processed_df["Churn"] = y
 
-print("\n📊 Statistik Deskriptif - Fitur Kategorikal:")
-print(df.describe(include='object'))
+    processed_df.to_csv(
+        output_file,
+        index=False
+    )
 
-print("🔍 Pengecekan Missing Values")
-print("=" * 50)
+    print("Preprocessing selesai!")
 
-missing = df.isnull().sum()
-missing_pct = (missing / len(df) * 100).round(2)
-missing_df = pd.DataFrame({'Jumlah': missing, 'Persen (%)': missing_pct})
-missing_df = missing_df[missing_df['Jumlah'] > 0]
+if __name__ == "__main__":
 
-if missing_df.empty:
-    print("✅ Tidak ada NaN langsung terdeteksi.\n")
-else:
-    print(missing_df)
-
-spaces = (df['TotalCharges'].astype(str).str.strip() == '').sum()
-print(f"⚠️  Hidden missing values pada 'TotalCharges': {spaces} baris")
-print(f"   → Nilainya berupa string kosong (spasi), bukan NaN")
-print(f"   → Akan dikonversi menjadi NaN saat preprocessing")
-
-total_dups = df.duplicated().sum()
-print(f"🔍 Jumlah baris duplikat: {total_dups}")
-if total_dups == 0:
-    print("✅ Tidak ada data duplikat!")
-else:
-    print(f"⚠️  Ditemukan {total_dups} baris duplikat → akan dihapus saat preprocessing")
-    print(df[df.duplicated()])
-
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-fig.suptitle('Distribusi Target: Churn', fontsize=15, fontweight='bold')
-
-churn_counts = df['Churn'].value_counts()
-colors = ['#1976D2', '#D32F2F']
-
-bars = axes[0].bar(churn_counts.index, churn_counts.values,
-                   color=colors, edgecolor='white', linewidth=2, width=0.5)
-axes[0].set_title('Jumlah Per Kelas', fontweight='bold', fontsize=12)
-axes[0].set_xlabel('Churn', fontsize=11)
-axes[0].set_ylabel('Jumlah Pelanggan', fontsize=11)
-for bar, val in zip(bars, churn_counts.values):
-    axes[0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 40,
-                 f'{val:,}', ha='center', fontweight='bold', fontsize=12)
-
-axes[1].pie(churn_counts.values, labels=churn_counts.index,
-            autopct='%1.1f%%', colors=colors, startangle=90,
-            textprops={'fontsize': 12},
-            wedgeprops={'edgecolor': 'white', 'linewidth': 2})
-axes[1].set_title('Proporsi Kelas', fontweight='bold', fontsize=12)
-
-plt.tight_layout()
-plt.savefig('eda_01_target_distribution.png', dpi=100, bbox_inches='tight')
-plt.close()
-
-print("\n📊 Distribusi Churn:")
-for label, count in churn_counts.items():
-    print(f"   {label:>5}: {count:,} ({count/len(df)*100:.1f}%)")
-print("\n⚠️  Dataset IMBALANCED - perlu diperhatikan saat modeling")
-
-df_vis = df.copy()
-df_vis['TotalCharges'] = pd.to_numeric(df_vis['TotalCharges'], errors='coerce')
-numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
-
-fig, axes = plt.subplots(2, 3, figsize=(15, 9))
-fig.suptitle('Distribusi Fitur Numerik (Histogram & Boxplot)', fontsize=14, fontweight='bold')
-
-for i, col in enumerate(numerical_cols):
-    data = df_vis[col].dropna()
-
-    axes[0, i].hist(data, bins=30, color='#1976D2', edgecolor='white', alpha=0.85)
-    axes[0, i].axvline(data.mean(), color='red', linestyle='--', linewidth=1.8,
-                        label=f'Mean: {data.mean():.1f}')
-    axes[0, i].axvline(data.median(), color='orange', linestyle=':', linewidth=1.8,
-                        label=f'Median: {data.median():.1f}')
-    axes[0, i].set_title(f'Histogram: {col}', fontweight='bold')
-    axes[0, i].set_xlabel(col)
-    axes[0, i].set_ylabel('Frekuensi')
-    axes[0, i].legend(fontsize=9)
-
-    axes[1, i].boxplot(data, patch_artist=True,
-                        boxprops=dict(facecolor='#64B5F6', color='#1565C0'),
-                        medianprops=dict(color='#D32F2F', linewidth=2.5),
-                        whiskerprops=dict(color='#1565C0', linewidth=1.5),
-                        capprops=dict(color='#1565C0'),
-                        flierprops=dict(marker='o', color='#F44336', alpha=0.4, markersize=4))
-    axes[1, i].set_title(f'Boxplot: {col}', fontweight='bold')
-    axes[1, i].set_ylabel(col)
-
-plt.tight_layout()
-plt.savefig('eda_02_numerical_distribution.png', dpi=100, bbox_inches='tight')
-plt.close()
-
-print("\n📊 Statistik Fitur Numerik:")
-print(df_vis[numerical_cols].describe().round(2))
-
-cat_cols = ['gender', 'SeniorCitizen', 'Partner', 'Dependents',
-            'InternetService', 'Contract', 'PaymentMethod', 'MultipleLines']
-
-fig, axes = plt.subplots(2, 4, figsize=(22, 10))
-axes = axes.ravel()
-colors_bar = ['#1976D2', '#D32F2F']
-
-for i, col in enumerate(cat_cols):
-    crosstab = df.groupby([col, 'Churn']).size().unstack(fill_value=0)
-    crosstab.plot(kind='bar', ax=axes[i], color=colors_bar,
-                  edgecolor='white', linewidth=0.5, width=0.7)
-    axes[i].set_title(f'{col} vs Churn', fontweight='bold', fontsize=11)
-    axes[i].set_xlabel(col, fontsize=10)
-    axes[i].set_ylabel('Jumlah', fontsize=10)
-    axes[i].tick_params(axis='x', rotation=25, labelsize=9)
-    axes[i].legend(['No Churn', 'Churn'], fontsize=9)
-    axes[i].grid(axis='y', alpha=0.4)
-
-plt.suptitle('Distribusi Fitur Kategorikal vs Target (Churn)',
-             fontsize=14, fontweight='bold')
-plt.tight_layout()
-plt.savefig('eda_03_categorical_vs_churn.png', dpi=100, bbox_inches='tight')
-plt.close()
-
-print("Insight dari visualisasi:")
-print("   - Contract month-to-month memiliki churn rate tertinggi")
-print("   - Pelanggan tanpa partner/dependent lebih rentan churn")
-print("   - Fiber optic memiliki churn lebih tinggi dari DSL")
-
-df_corr = df.copy()
-df_corr['TotalCharges'] = pd.to_numeric(df_corr['TotalCharges'], errors='coerce')
-df_corr['Churn_num'] = (df_corr['Churn'] == 'Yes').astype(int)
-
-num_cols_corr = ['SeniorCitizen', 'tenure', 'MonthlyCharges', 'TotalCharges', 'Churn_num']
-corr_matrix = df_corr[num_cols_corr].corr()
-
-plt.figure(figsize=(9, 7))
-mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
-sns.heatmap(corr_matrix, annot=True, fmt='.3f', cmap='RdYlBu_r',
-            mask=mask, vmin=-1, vmax=1, square=True,
-            linewidths=0.8, linecolor='white',
-            annot_kws={'size': 12, 'weight': 'bold'})
-plt.title('Heatmap Korelasi Fitur Numerik', fontsize=14, fontweight='bold')
-plt.xticks(fontsize=11, rotation=30)
-plt.yticks(fontsize=11, rotation=0)
-plt.tight_layout()
-plt.savefig('eda_04_correlation_heatmap.png', dpi=100, bbox_inches='tight')
-plt.close()
-
-print("\n📊 Korelasi dengan Target (Churn):")
-corr_target = corr_matrix['Churn_num'].drop('Churn_num').abs().sort_values(ascending=False)
-for feat, val in corr_target.items():
-    bar_vis = '█' * int(val * 25)
-    print(f"   {feat:<20}: {val:.4f}  {bar_vis}")
-
-print("=" * 60)
-print("           RINGKASAN HASIL EDA")
-print("=" * 60)
-
-df_temp = df.copy()
-df_temp['TotalCharges'] = pd.to_numeric(df_temp['TotalCharges'], errors='coerce')
-
-print(f"\n📌 Dataset      : Telco Customer Churn")
-print(f"📌 Shape        : {df.shape[0]:,} baris x {df.shape[1]} kolom")
-print(f"📌 Duplikat     : {df.duplicated().sum()}")
-print(f"📌 Missing (NaN): {df_temp.isnull().sum().sum()} (TotalCharges hidden: {spaces})")
-
-print(f"\n📊 Distribusi Target:")
-for label, count in df['Churn'].value_counts().items():
-    print(f"   - {label}: {count:,} ({count/len(df)*100:.1f}%)")
-
-print(f"\n🔎 Rencana Preprocessing:")
-print(f"   1. Konversi 'TotalCharges' Object → Float (+ tangani {spaces} hidden NaN)")
-print(f"   2. Isi missing values TotalCharges dengan Median")
-print(f"   3. Hapus kolom 'customerID' (tidak informatif untuk model)")
-print(f"   4. Label Encoding semua fitur kategorikal")
-print(f"   5. StandardScaler fitur numerik: tenure, MonthlyCharges, TotalCharges")
-print(f"   6. Train/Test Split - 80:20 (stratified berdasarkan target)")
-print(f"   7. Simpan ke folder 'telco_preprocessing/'")
-print(f"\n✅ Siap masuk ke tahap Data Preprocessing!")
-
-# -- 5. Data Preprocessing ----------------------------------------
-print("🔄 [5.1] Konversi Tipe Data 'TotalCharges'...")
-print(f"   Dtype sebelum : {df['TotalCharges'].dtype}")
-print(f"   Contoh nilai  : {df['TotalCharges'].head(5).tolist()}")
-
-df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-
-print(f"\n   Dtype sesudah  : {df['TotalCharges'].dtype}")
-print(f"   Missing values : {df['TotalCharges'].isnull().sum()} (dari konversi string kosong)")
-print("   ✅ Berhasil!")
-
-print("🔧 [5.2] Penanganan Missing Values...")
-
-median_val = df['TotalCharges'].median()
-df['TotalCharges'].fillna(median_val, inplace=True)
-
-print(f"   Kolom         : TotalCharges")
-print(f"   Metode        : Isi dengan Median")
-print(f"   Nilai Median  : {median_val:.2f}")
-print(f"   Missing tersisa: {df['TotalCharges'].isnull().sum()}")
-print(f"   Total missing seluruh dataset: {df.isnull().sum().sum()}")
-print("   ✅ Berhasil!")
-
-print("🗑️ [5.3] Menghapus Kolom 'customerID'...")
-print(f"   Shape sebelum : {df.shape}")
-
-df.drop('customerID', axis=1, inplace=True)
-
-print(f"   Shape sesudah : {df.shape}")
-print(f"   Kolom tersisa : {list(df.columns)}")
-print("   ✅ Berhasil!")
-
-print("🔤 [5.4] Label Encoding Fitur Kategorikal...")
-print("=" * 60)
-
-categorical_cols = [c for c in df.select_dtypes(include='object').columns if c != 'Churn']
-print(f"Jumlah kolom diproses : {len(categorical_cols)}")
-print(f"Kolom                 : {categorical_cols}\n")
-
-le = LabelEncoder()
-encoding_map = {}
-
-for col in categorical_cols:
-    unique_vals = sorted(df[col].unique())
-    df[col] = le.fit_transform(df[col])
-    encoding_map[col] = {v: int(le.transform([v])[0]) for v in unique_vals}
-    print(f"   ✅ {col:<30}: {unique_vals}")
-
-df['Churn'] = (df['Churn'] == 'Yes').astype(int)
-print(f"   ✅ {'Churn (Target)':<30}: ['No', 'Yes'] → [0, 1]")
-
-print(f"\n📊 Preview 5 baris setelah encoding:")
-print(df.head())
-
-print("📏 [5.5] Standarisasi Fitur Numerik (StandardScaler)...")
-print("=" * 60)
-
-numerical_features = ['tenure', 'MonthlyCharges', 'TotalCharges']
-
-print("Sebelum standarisasi:")
-print(df[numerical_features].describe().round(4))
-
-scaler = StandardScaler()
-df[numerical_features] = scaler.fit_transform(df[numerical_features])
-
-print("\nSesudah standarisasi (mean ≈ 0, std ≈ 1):")
-print(df[numerical_features].describe().round(4))
-print("   ✅ Berhasil!")
-
-print("✂️ [5.6] Pembagian Dataset - 80% Train | 20% Test...")
-print("=" * 60)
-
-X = df.drop('Churn', axis=1)
-y = df['Churn']
-
-print(f"   Features (X) : {X.shape}")
-print(f"   Target   (y) : {y.shape}")
-print(f"   Kolom fitur  : {list(X.columns)}")
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
-
-print(f"\n✅ Split selesai (stratified):")
-print(f"   Training set  : {X_train.shape[0]:,} baris | Churn={y_train.sum()} ({y_train.mean()*100:.1f}%)")
-print(f"   Testing set   : {X_test.shape[0]:,} baris  | Churn={y_test.sum()} ({y_test.mean()*100:.1f}%)")
-
-print("💾 [5.7] Menyimpan Dataset Hasil Preprocessing...")
-print("=" * 60)
-
-output_dir = 'telco_preprocessing'
-os.makedirs(output_dir, exist_ok=True)
-
-train_df = pd.concat([X_train.reset_index(drop=True), y_train.reset_index(drop=True)], axis=1)
-test_df  = pd.concat([X_test.reset_index(drop=True),  y_test.reset_index(drop=True)],  axis=1)
-
-train_df.to_csv(f'{output_dir}/train.csv',              index=False)
-test_df.to_csv(f'{output_dir}/test.csv',                index=False)
-df.to_csv(f'{output_dir}/full_preprocessed.csv',        index=False)
-
-print(f"\n✅ File tersimpan di folder '{output_dir}/':")
-print(f"   📄 train.csv              → {train_df.shape[0]:,} baris x {train_df.shape[1]} kolom")
-print(f"   📄 test.csv               → {test_df.shape[0]:,} baris x {test_df.shape[1]} kolom")
-print(f"   📄 full_preprocessed.csv  → {df.shape[0]:,} baris x {df.shape[1]} kolom")
-
-print(f"\n{'='*60}")
-print("🎉 PREPROCESSING SELESAI! Dataset siap digunakan untuk modeling.")
-print('='*60)
-
-print(train_df.head())
+    preprocess_data(
+        "dataset_raw/WA_Fn-UseC_-Telco-Customer-Churn_raw.csv",
+        "preprocessing/WA_Fn-UseC_-Telco-Customer-Churn_preprocessing.csv"
+    )
