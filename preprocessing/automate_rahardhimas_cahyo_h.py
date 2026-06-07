@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Template_Eksperimen_MSML - versi GitHub Actions
+(Diadaptasi dari Google Colab: google.colab dihapus)
+"""
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,6 +28,8 @@ print("✅ Semua library berhasil diimpor!")
 print(f"   pandas  : {pd.__version__}")
 print(f"   numpy   : {np.__version__}")
 
+# -- 3. Memuat Dataset ----------------------------------------
+# Cari file CSV di direktori saat ini (atau subfolder)
 csv_files = glob.glob('*.csv') + glob.glob('**/*.csv', recursive=True)
 if not csv_files:
     raise FileNotFoundError(
@@ -47,6 +55,7 @@ print()
 print("5 Baris Terakhir:")
 print(df.tail())
 
+# -- 4. EDA ----------------------------------------
 print("=" * 60)
 print("         INFORMASI UMUM DATASET")
 print("=" * 60)
@@ -54,10 +63,10 @@ print(f"\nShape  : {df.shape[0]:,} baris x {df.shape[1]} kolom")
 print()
 df.info()
 
-print("📊 Statistik Deskriptif — Fitur Numerik:")
+print("📊 Statistik Deskriptif - Fitur Numerik:")
 print(df.describe())
 
-print("\n📊 Statistik Deskriptif — Fitur Kategorikal:")
+print("\n📊 Statistik Deskriptif - Fitur Kategorikal:")
 print(df.describe(include='object'))
 
 print("🔍 Pengecekan Missing Values")
@@ -114,7 +123,7 @@ plt.close()
 print("\n📊 Distribusi Churn:")
 for label, count in churn_counts.items():
     print(f"   {label:>5}: {count:,} ({count/len(df)*100:.1f}%)")
-print("\n⚠️  Dataset IMBALANCED — perlu diperhatikan saat modeling")
+print("\n⚠️  Dataset IMBALANCED - perlu diperhatikan saat modeling")
 
 df_vis = df.copy()
 df_vis['TotalCharges'] = pd.to_numeric(df_vis['TotalCharges'], errors='coerce')
@@ -229,10 +238,11 @@ print(f"   2. Isi missing values TotalCharges dengan Median")
 print(f"   3. Hapus kolom 'customerID' (tidak informatif untuk model)")
 print(f"   4. Label Encoding semua fitur kategorikal")
 print(f"   5. StandardScaler fitur numerik: tenure, MonthlyCharges, TotalCharges")
-print(f"   6. Train/Test Split — 80:20 (stratified berdasarkan target)")
+print(f"   6. Train/Test Split - 80:20 (stratified berdasarkan target)")
 print(f"   7. Simpan ke folder 'telco_preprocessing/'")
 print(f"\n✅ Siap masuk ke tahap Data Preprocessing!")
-─
+
+# -- 5. Data Preprocessing ----------------------------------------
 print("🔄 [5.1] Konversi Tipe Data 'TotalCharges'...")
 print(f"   Dtype sebelum : {df['TotalCharges'].dtype}")
 print(f"   Contoh nilai  : {df['TotalCharges'].head(5).tolist()}")
@@ -301,7 +311,7 @@ print("\nSesudah standarisasi (mean ≈ 0, std ≈ 1):")
 print(df[numerical_features].describe().round(4))
 print("   ✅ Berhasil!")
 
-print("✂️ [5.6] Pembagian Dataset — 80% Train | 20% Test...")
+print("✂️ [5.6] Pembagian Dataset - 80% Train | 20% Test...")
 print("=" * 60)
 
 X = df.drop('Churn', axis=1)
