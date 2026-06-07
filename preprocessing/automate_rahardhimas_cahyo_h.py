@@ -1,12 +1,4 @@
 import pandas as pd
-<<<<<<< HEAD
-=======
-import numpy as np
-import glob
-import warnings
-import os
-
->>>>>>> 8ecad84bfb888f7f2040753a0ac8b4a43537bcde
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 def preprocess_data(input_file, output_file):
